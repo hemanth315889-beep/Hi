@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Mobile File Manager</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #818cf8;
+            --background-color: #111827;
+            --surface-color: #1f2937;
+            --text-color: #f9fafb;
+            --text-light: #9ca3af;
+            --border-color: #374151;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            --border-radius: 10px;
+
+            /* --- File & Folder Colors --- */
+            --danger-color: #f43f5e;
+            --folder-color: #fbbf24;
+            --file-color: #9ca3af;
+            --exec-color: #4ade80;
+            --image-color: #fb923c;
+            --archive-color: #9ca3af;
+            --video-color: #60a5fa;
+
+            /* --- Language & Script Colors --- */
+            --code-c-color: #c084fc;
+            --code-html-color: #f43f5e;
+            --code-css-color: #60a5fa;
+            --code-js-color: #fbbf24;
+            --code-py-color: #2dd4bf;
+            --script-color: #22d3ee;
+        }
+
+        * {
+            margin: 0; padding: 0; box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body { background-color: var(--background-color); color: var(--text-color); height: 100vh; overflow: hidden; }
+        .container { display: flex; flex-direction: column; height: 100%; width: 100%; background-color: var(--background-color); position: relative; }
+        .app-bar { padding: 0.5rem 0.75rem; background-color: var(--surface-color); flex-shrink: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+        .app-title { font-size: 1.25rem; font-weight: 600; }
+        .icon-btn { background: transparent; border: none; border-radius: 50%; color: var(--text-light); cursor: pointer; width: 44px; height: 44px; font-size: 1.25rem; display: flex; align-items: center; justify-content: center; transition: background-color 0.2s; }
+        .icon-btn:hover { background-color: #f0f2f5; }
+        .icon-btn.active { color: var(--primary-color); }
+        .icon-btn:disabled { color: #ccc; cursor: not-allowed; }
+        .path-bar { padding: 0.5rem 1rem; background-color: var(--surface-color); display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; border-bottom: 1px solid var(--border-color); }
+        .path-input { flex-grow: 1; font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; background: transparent; border: none; color: var(--text-color); font-size: 1rem; outline: none; }
+        .main-content { flex-grow: 1; position: relative; overflow: hidden; padding: 0.5rem; }
+        .file-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            height: 100%;
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 0.5rem;
+        }
+        .file-list-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            transition: background-color 0.2s;
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            position: relative;
+            text-align: center;
+        }
+        .file-list-item.selected { background-color: #374151; }
+        .item-select-icon {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            font-size: 1.25rem;
+            color: var(--border-color);
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .file-list-item.selected .item-select-icon { color: var(--primary-color); }
+        .item-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .item-details { cursor: pointer; }
+        .item-details.non-clickable { cursor: default; }
+        .item-name {
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 90px;
+        }
+        .item-size { display: none; }
+        .item-actions { display: flex; }
+        .action-btn { font-size: 1.25rem; color: var(--text-light); }
+        .sidebar { position: fixed; top: 0; left: 0; width: 280px; height: 100%; background-color: var(--surface-color); z-index: 1001; box-shadow: var(--shadow); padding: 20px; display: flex; flex-direction: column; transform: translateX(-100%); transition: transform 0.3s ease-in-out; }
+        .sidebar.open { transform: translateX(0); }
+        .sidebar-logo { display: flex; align-items: center; gap: 10px; font-size: 1.5rem; font-weight: 600; color: var(--primary-color); margin-bottom: 30px; padding-left: 10px; }
+        .sidebar-nav a, .sidebar-nav button { display: flex; align-items: center; width: 100%; padding: 12px 15px; margin-bottom: 8px; border-radius: 8px; text-decoration: none; color: var(--text-light); font-weight: 500; transition: background-color 0.2s, color 0.2s; background: none; border: none; cursor: pointer; font-size: 1rem; font-family: inherit; text-align: left; }
+        .sidebar-nav i { width: 30px; font-size: 1.1rem; }
+        .sidebar-nav a:hover, .sidebar-nav button:hover { background-color: #e9f2fe; color: var(--primary-color); }
+        .sidebar-nav button.active { background-color: var(--primary-color); color: white; }
+        .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 1000; opacity: 0; pointer-events: none; transition: opacity 0.3s ease-in-out; }
+        .sidebar-overlay.open { opacity: 1; pointer-events: auto; }
+        .fab { position: absolute; bottom: 1.5rem; right: 1.5rem; width: 56px; height: 56px; border-radius: 50%; background-color: var(--primary-color); color: white; border: none; font-size: 1.75rem; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.25); transition: all 0.2s ease-in-out; z-index: 10; }
+        .fab:hover { transform: scale(1.05); }
+        .status-bar { padding: 0.25rem 1rem; font-size: 0.8rem; flex-shrink: 0; text-align: center; color: var(--text-light); background-color: var(--background-color); }
+        .loader { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(2px); display: none; align-items: center; justify-content: center; z-index: 2000; color: var(--primary-color); font-size: 1.5rem; font-weight: 500; }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 1002; }
+        .modal-dialog { background-color: var(--surface-color); padding: 1.5rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); width: 90%; max-width: 350px; }
+        .modal-title { margin-top: 0; margin-bottom: 1.5rem; font-size: 1.25rem; font-weight: 500; }
+        .modal-input { width: 100%; padding: 0.75rem; background: var(--background-color); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-color); font-size: 1rem; margin-bottom: 1.5rem; }
+        .modal-input:focus { outline: none; border-color: var(--primary-color); }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
+        .modal-btn { background: transparent; border: none; cursor: pointer; padding: 0.6rem 1rem; border-radius: 6px; font-weight: 600; font-size: 0.9rem; text-transform: uppercase; transition: background-color 0.2s; }
+        .modal-btn.cancel { color: var(--primary-color); }
+        .modal-btn.create, .modal-btn.danger { background-color: var(--primary-color); color: white; }
+        .modal-btn.danger { background-color: var(--danger-color); }
+        .bottom-bar { position: absolute; bottom: 0; left: 0; right: 0; background-color: var(--surface-color); padding: 0.75rem 1rem; display: none; align-items: center; justify-content: space-between; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 11; }
+        .bottom-bar-btn { color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 20px; font-weight: bold; cursor: pointer; }
+        .bottom-bar-btn.paste-btn { background-color: var(--primary-color); }
+        .bottom-bar-btn.cancel-btn { background-color: var(--text-light); }
+        .multi-select-bar { justify-content: space-around; }
+        .multi-select-bar .icon-btn { color: var(--text-color); width: 65px; height: 55px; border-radius: 12px; flex-direction: column; font-size: 1.25rem; gap: 4px; }
+        .multi-select-bar .icon-btn span { font-size: 0.7rem; font-weight: 500; }
+
+        .editor-view {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: var(--background-color);
+            z-index: 1100; display: flex; flex-direction: column;
+            transform: translateX(100%); transition: transform 0.3s ease-in-out;
+        }
+        .editor-view.open { transform: translateX(0); }
+        .editor-bar {
+            padding: 0.5rem 0.75rem; background-color: var(--surface-color);
+            flex-shrink: 0; display: flex; align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
+        .editor-filename {
+            flex-grow: 1; font-size: 1.1rem; font-weight: 600;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0 1rem;
+        }
+        .save-btn {
+            background-color: var(--primary-color); color: white; border: none;
+            padding: 0.5rem 1rem; border-radius: 8px; font-size: 1rem;
+            font-weight: 600; cursor: pointer; display: flex;
+            align-items: center; gap: 8px; transition: background-color 0.2s;
+        }
+        .save-btn:hover { background-color: #1e61d1; }
+        .editor-textarea {
+            flex-grow: 1; width: 100%; border: none; outline: none; resize: none;
+            padding: 1rem; font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 1rem; line-height: 1.5; color: var(--text-color);
+            background-color: var(--background-color);
+        }
+    </style>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><i class="fa-solid fa-folder-open"></i><span>File Manager</span></div>
+    <nav class="sidebar-nav">
+        <a href="#" id="sidebarHomeBtn"><i class="fa-solid fa-house"></i> Home</a>
+        <a href="#" id="sidebarSdcardBtn"><i class="fa-solid fa-sd-card"></i> SD Card</a>
+        <button id="toggleHiddenBtn"><i class="fa-solid fa-eye"></i> Hidden Files</button>
+    </nav>
+</aside>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<div class="container">
+    <header class="app-bar">
+        <button class="icon-btn" id="menuBtn" title="Open Menu"><i class="fa-solid fa-bars"></i></button>
+        <h1 class="app-title">Current Folder</h1>
+        <button class="icon-btn" title="Refresh" onclick="refreshFromInput()"><i class="fa-solid fa-rotate-right"></i></button>
+    </header>
+    <div class="path-bar">
+        <button id="upBtn" class="icon-btn" title="Go Up" onclick="navigateUp()"><i class="fa-solid fa-arrow-up"></i></button>
+        <input type="text" class="path-input" id="pathDisplay" value="/data/data/com.termux/files/home">
+    </div>
+    <main class="main-content">
+        <ul class="file-list" id="fileList"></ul>
+    </main>
+    <div class="status-bar" id="statusBar">Ready</div>
+    <button id="createBtn" class="fab" title="Create Item" onclick="showCreateModal()"><i class="fa-solid fa-plus"></i></button>
+    <div id="pasteBar" class="bottom-bar">
+        <span id="pasteInfo"></span>
+        <div><button class="bottom-bar-btn cancel-btn" onclick="clearClipboard()">Cancel</button><button class="bottom-bar-btn paste-btn" onclick="pasteItems()">Paste</button></div>
+    </div>
+    <div id="multiSelectBar" class="bottom-bar multi-select-bar">
+        <button class="icon-btn" onclick="selectMultipleForExport('copy')" title="Copy"><i class="fa-solid fa-copy"></i><span>Copy</span></button>
+        <button class="icon-btn" onclick="selectMultipleForExport('move')" title="Move"><i class="fa-solid fa-scissors"></i><span>Move</span></button>
+        <button class="icon-btn" onclick="deleteSelectedItems()" title="Delete"><i class="fa-solid fa-trash"></i><span>Delete</span></button>
+        <button class="icon-btn" onclick="clearSelection()" title="Cancel"><i class="fa-solid fa-xmark"></i><span>Cancel</span></button>
+    </div>
+</div>
+
+<div class="loader" id="loader"><i class="fa-solid fa-spinner fa-spin"></i></div>
+
+<div class="modal-overlay" id="modalOverlay">
+    <div class="modal-dialog" id="createModal">
+        <h3 class="modal-title">Create New Item</h3>
+        <div style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem;"><label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;"><input type="radio" name="createType" value="file" checked> File</label><label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;"><input type="radio" name="createType" value="folder"> Folder</label></div>
+        <input type="text" class="modal-input" id="modalNewNameInput" placeholder="Enter name..."><div class="modal-actions"><button class="modal-btn cancel" id="modalCancelBtn">Cancel</button><button class="modal-btn create" id="modalCreateBtn">Create</button></div>
+    </div>
+    <div class="modal-dialog" id="renameModal">
+        <h3 class="modal-title" id="renameModalTitle">Rename</h3>
+        <input type="text" class="modal-input" id="renameInput" placeholder="Enter new name..."><div class="modal-actions"><button class="modal-btn cancel" id="renameCancelBtn">Cancel</button><button class="modal-btn create" id="renameConfirmBtn">Rename</button></div>
+    </div>
+    <div class="modal-dialog" id="confirmModal">
+        <h3 class="modal-title" id="confirmModalTitle">Confirm Action</h3>
+        <p id="confirmModalText" style="margin-bottom: 1.5rem; line-height: 1.5;"></p><div class="modal-actions"><button class="modal-btn cancel" id="confirmCancelBtn">Cancel</button><button class="modal-btn danger" id="confirmConfirmBtn">Confirm</button></div>
+    </div>
+</div>
+
+<div class="editor-view" id="editorView">
+    <header class="editor-bar">
+        <button class="icon-btn" id="closeEditorBtn"><i class="fa-solid fa-arrow-left"></i></button>
+        <h2 class="editor-filename" id="editorFilename"></h2>
+        <button class="save-btn" id="saveFileBtn"><i class="fa-solid fa-save"></i> Save</button>
+    </header>
+    <textarea class="editor-textarea" id="editorTextarea" spellcheck="false"></textarea>
+</div>
+
+
+<script>
+    const API_BASE = 'http://localhost:8080', TERMUX_HOME_PATH = '/data/data/com.termux/files/home', SDCARD_PATH = '/sdcard';
+    const fileListEl = document.getElementById('fileList'), statusBarEl = document.getElementById('statusBar'), pathDisplayEl = document.getElementById('pathDisplay'), upBtn = document.getElementById('upBtn'), loader = document.getElementById('loader'), createBtn = document.getElementById('createBtn'), pasteBar = document.getElementById('pasteBar'), pasteInfo = document.getElementById('pasteInfo'), toggleHiddenBtn = document.getElementById('toggleHiddenBtn'), multiSelectBar = document.getElementById('multiSelectBar');
+    const menuBtn = document.getElementById('menuBtn'), sidebar = document.getElementById('sidebar'), sidebarOverlay = document.getElementById('sidebarOverlay'), sidebarHomeBtn = document.getElementById('sidebarHomeBtn'), sidebarSdcardBtn = document.getElementById('sidebarSdcardBtn');
+    const modalOverlay = document.getElementById('modalOverlay'), createModal = document.getElementById('createModal'), modalNewNameInput = document.getElementById('modalNewNameInput'), modalCancelBtn = document.getElementById('modalCancelBtn'), modalCreateBtn = document.getElementById('modalCreateBtn'), renameModal = document.getElementById('renameModal'), renameModalTitle = document.getElementById('renameModalTitle'), renameInput = document.getElementById('renameInput'), renameCancelBtn = document.getElementById('renameCancelBtn'), renameConfirmBtn = document.getElementById('renameConfirmBtn');
+    const confirmModal = document.getElementById('confirmModal'), confirmModalTitle = document.getElementById('confirmModalTitle'), confirmModalText = document.getElementById('confirmModalText'), confirmCancelBtn = document.getElementById('confirmCancelBtn'), confirmConfirmBtn = document.getElementById('confirmConfirmBtn');
+    const editorView = document.getElementById('editorView'), closeEditorBtn = document.getElementById('closeEditorBtn'), editorFilename = document.getElementById('editorFilename'), saveFileBtn = document.getElementById('saveFileBtn'), editorTextarea = document.getElementById('editorTextarea');
+
+    let currentPath = TERMUX_HOME_PATH, clipboard = { sources: [], action: null }, showHiddenFiles = false, selectedItems = [];
+
+    function openSidebar() { sidebar.classList.add('open'); sidebarOverlay.classList.add('open'); }
+    function closeSidebar() { sidebar.classList.remove('open'); sidebarOverlay.classList.remove('open'); }
+    function formatBytes(bytes, decimals = 2) { if (!bytes || bytes === 0) return '0 B'; const k = 1024; const dm = decimals < 0 ? 0 : decimals; const sizes = ['B', 'KB', 'MB', 'GB', 'TB']; const i = Math.floor(Math.log(bytes) / Math.log(k)); return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i]; }
+
+    function getIconDetails(name, type) {
+        if (type === 'folder') {
+            return { icon: 'fa-solid fa-folder', color: 'var(--folder-color)' };
+        }
+
+        if (!name.includes('.')) {
+            return { icon: 'fa-solid fa-file-lines', color: 'var(--script-color)' };
+        }
+
+        const extension = name.split('.').pop().toLowerCase();
+        switch (extension) {
+            case 'pdf': return { icon: 'fa-solid fa-file-pdf', color: 'var(--danger-color)' };
+            case 'mp4': case 'mkv': case 'mov': case 'avi': case 'webm': return { icon: 'fa-solid fa-file-video', color: 'var(--video-color)' };
+            case 'png': case 'jpg': case 'jpeg': case 'gif': case 'webp': case 'svg': case 'bmp': return { icon: 'fa-solid fa-file-image', color: 'var(--image-color)' };
+            case 'zip': case 'rar': case '7z': case 'tar': case 'gz': return { icon: 'fa-solid fa-file-zipper', color: 'var(--archive-color)' };
+            case 'c': case 'cpp': case 'cs': return { icon: 'fa-solid fa-file-code', color: 'var(--code-c-color)' };
+            case 'html': return { icon: 'fa-solid fa-file-code', color: 'var(--code-html-color)' };
+            case 'css': return { icon: 'fa-solid fa-file-code', color: 'var(--code-css-color)' };
+            case 'js': return { icon: 'fa-solid fa-file-code', color: 'var(--code-js-color)' };
+            case 'py': return { icon: 'fa-solid fa-file-code', color: 'var(--code-py-color)' };
+            case 'rb': return { icon: 'fa-solid fa-file-code', color: 'var(--danger-color)' };
+            case 'sh': case 'bash': return { icon: 'fa-solid fa-file-lines', color: 'var(--script-color)' };
+            default: return { icon: 'fa-solid fa-file', color: 'var(--primary-color)' };
+        }
+    }
+
+    async function fetchAndRenderFiles() {
+        clearSelection();
+        try {
+            const response = await apiRequest('/list');
+            currentPath = response.path;
+            const allFiles = response.files.sort((a, b) => (a.type === b.type) ? a.name.localeCompare(b.name) : (a.type === 'folder' ? -1 : 1));
+            const files = showHiddenFiles ? allFiles : allFiles.filter(item => !item.name.startsWith('.'));
+            pathDisplayEl.value = currentPath;
+            upBtn.disabled = (currentPath === "/");
+            fileListEl.innerHTML = files.length === 0 ? `<li style="text-align: center; padding: 4rem; color: #6a708a; font-size: 1rem;">Directory is empty</li>` : files.map(item => {
+                const details = getIconDetails(item.name, item.type);
+
+                // --- NEW ROBUST LOGIC BLOCK ---
+                let clickAction = '';
+                let detailsClass = 'item-details';
+                let iconColor = details.color;
+
+                if (item.type === 'folder') {
+                    // Folders are always for navigation.
+                    clickAction = `onclick="navigateTo('${item.name}')"`;
+                } else { // This is a file
+                    if (item.is_executable) {
+                        // Executable files are never editable.
+                        iconColor = 'var(--exec-color)';
+                        detailsClass += ' non-clickable';
+                    } else {
+                        // Check against a "blacklist" of known binary/non-text file extensions.
+                        const extension = item.name.includes('.') ? item.name.split('.').pop().toLowerCase() : '';
+                        const nonEditableExtensions = new Set([
+                            'pdf',
+                            'mp4', 'mkv', 'mov', 'avi', 'webm', // Video
+                            'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', // Image
+                            'zip', 'rar', '7z', 'tar', 'gz' // Archive
+                        ]);
+
+                        if (nonEditableExtensions.has(extension)) {
+                            // If the extension is on the non-editable list, don't add the click action.
+                            detailsClass += ' non-clickable';
+                        } else {
+                            // Otherwise, it's a code file, script, or plain text file. Make it editable.
+                            clickAction = `onclick="openEditMode('${item.name}')"`;
+                        }
+                    }
+                }
+                // --- END OF NEW LOGIC BLOCK ---
+
+                const formattedSize = item.type === 'file' ? formatBytes(item.size) : '—';
+                const execNameIndicator = item.is_executable ? `<i class="fa-solid fa-bolt" style="font-size: 0.7rem; margin-left: 4px; color: var(--exec-color);"></i>` : '';
+                const execButtonHtml = item.type === 'file' ? `<button title="Toggle Executable" class="icon-btn action-btn execute" onclick="event.stopPropagation(); toggleExecutable('${item.name}', ${item.is_executable})"><i class="fa-solid fa-bolt"></i></button>` : '';
+
+                return `<li class="file-list-item">
+                    <i class="item-select-icon fa-regular fa-circle" onclick="event.stopPropagation(); toggleSelection(this.parentElement, '${item.name}', '${item.type}')"></i>
+                    <div class="${detailsClass}" ${clickAction}>
+                        <div class="item-icon"><i class="${details.icon}" style="color: ${iconColor};"></i></div>
+                        <div class="item-name" title="${item.name}">${item.name}${execNameIndicator}</div>
+                    </div>
+                </li>`;
+            }).join('');
+            updateStatus(`${files.length} items loaded`);
+        } catch (error) { handleError(error); }
+    }
+
+    async function openEditMode(fileName) {
+        try {
+            const response = await apiRequest('/read', { method: 'POST', body: JSON.stringify({ name: fileName }) });
+            editorFilename.textContent = fileName;
+            editorTextarea.value = response.content || '';
+            saveFileBtn.dataset.filename = fileName;
+            editorView.classList.add('open');
+        } catch (error) { handleError(new Error(`Could not open ${fileName}: ${error.message}`)); }
+    }
+
+    function closeEditMode() {
+        editorView.classList.remove('open');
+        editorTextarea.value = '';
+        editorFilename.textContent = '';
+        delete saveFileBtn.dataset.filename;
+    }
+
+    async function saveFile() {
+        const fileName = saveFileBtn.dataset.filename;
+        if (!fileName) return;
+        try {
+            const response = await apiRequest('/write', { method: 'POST', body: JSON.stringify({ name: fileName, content: editorTextarea.value }) });
+            updateStatus(response.message || `Saved ${fileName}`);
+            closeEditMode();
+            fetchAndRenderFiles();
+        } catch (error) { handleError(new Error(`Failed to save ${fileName}: ${error.message}`)); }
+    }
+
+    function toggleSelection(listItem, name, type) { const item = { name, type }, index = selectedItems.findIndex(i => i.name === name), selectIcon = listItem.querySelector('.item-select-icon'); if (index > -1) { selectedItems.splice(index, 1); listItem.classList.remove('selected'); selectIcon.classList.replace('fa-solid', 'fa-regular'); selectIcon.classList.replace('fa-circle-check', 'fa-circle'); } else { selectedItems.push(item); listItem.classList.add('selected'); selectIcon.classList.replace('fa-regular', 'fa-solid'); selectIcon.classList.replace('fa-circle', 'fa-circle-check'); } updateMultiSelectUI(); }
+    function updateMultiSelectUI() { createBtn.style.display = selectedItems.length > 0 ? 'none' : 'flex'; multiSelectBar.style.display = selectedItems.length > 0 ? 'flex' : 'none'; pasteBar.style.display = clipboard.sources.length > 0 && selectedItems.length === 0 ? 'flex' : 'none'; }
+    function clearSelection() { selectedItems = []; document.querySelectorAll('.file-list-item.selected').forEach(el => { el.classList.remove('selected'); const icon = el.querySelector('.item-select-icon'); icon.classList.replace('fa-solid', 'fa-regular'); icon.classList.replace('fa-circle-check', 'fa-circle'); }); updateMultiSelectUI(); }
+    async function deleteSelectedItems() { if (selectedItems.length === 0) return; const confirmed = await showConfirmModal('Confirm Deletion', `Are you sure you want to delete these ${selectedItems.length} item(s)? This action cannot be undone.`, 'Delete'); if (!confirmed) { updateStatus('Deletion cancelled.'); return; } showLoader(true); let successCount = 0; const itemsToDelete = [...selectedItems]; for (const item of itemsToDelete) { try { await apiRequest('/delete', { method: 'POST', body: JSON.stringify(item) }); successCount++; updateStatus(`Deleting... (${successCount}/${itemsToDelete.length})`); } catch (err) { handleError(err); break; } } showLoader(false); updateStatus(`Deleted ${successCount} items.`); await fetchAndRenderFiles(); }
+    function selectMultipleForExport(action) { if (selectedItems.length === 0) return; clipboard.sources = selectedItems.map(item => ({...item, source_path: (currentPath === '/') ? `/${item.name}` : `${currentPath}/${item.name}`})); clipboard.action = action; updateStatus(`Selected ${selectedItems.length} for ${action}.`); pasteInfo.textContent = `${action.charAt(0).toUpperCase() + action.slice(1)} ${selectedItems.length} items`; clearSelection(); updateMultiSelectUI(); }
+    function clearClipboard() { clipboard = { sources: [], action: null }; updateStatus('Operation cancelled.'); updateMultiSelectUI(); }
+    async function pasteItems() { if (clipboard.sources.length === 0) return; showLoader(true); let successCount = 0; for (const item of clipboard.sources) { try { await apiRequest('/export', { method: 'POST', body: JSON.stringify({ source_path: item.source_path, destination_path: currentPath, action: clipboard.action }) }); successCount++; updateStatus(`Pasting... (${successCount}/${clipboard.sources.length})`); } catch (error) { handleError(error); break; } } showLoader(false); updateStatus(`Pasted ${successCount} items.`); clearClipboard(); await fetchAndRenderFiles(); }
+    function toggleHiddenFiles() { showHiddenFiles = !showHiddenFiles; toggleHiddenBtn.classList.toggle('active', showHiddenFiles); closeSidebar(); fetchAndRenderFiles(); }
+    function hideModal() { modalOverlay.style.display = 'none'; createModal.style.display = 'none'; renameModal.style.display = 'none'; confirmModal.style.display = 'none'; }
+    function showCreateModal() { createModal.style.display = 'block'; renameModal.style.display = 'none'; confirmModal.style.display = 'none'; modalOverlay.style.display = 'flex'; modalNewNameInput.value = ''; setTimeout(() => modalNewNameInput.focus(), 50); }
+    function showConfirmModal(title, text, confirmText = 'Confirm') { createModal.style.display = 'none'; renameModal.style.display = 'none'; confirmModalTitle.textContent = title; confirmModalText.textContent = text; confirmConfirmBtn.textContent = confirmText; confirmModal.style.display = 'block'; modalOverlay.style.display = 'flex'; return new Promise((resolve) => { const onCancel = () => { hideModal(); resolve(false); }; const onConfirm = () => { hideModal(); resolve(true); }; confirmCancelBtn.onclick = onCancel; confirmConfirmBtn.onclick = onConfirm; }); }
+    async function createItem() { const name = modalNewNameInput.value.trim(); if (!name) return handleError(new Error('Name cannot be empty.')); hideModal(); const type = document.querySelector('input[name="createType"]:checked').value; try { const response = await apiRequest('/create', { method: 'POST', body: JSON.stringify({ name, type }) }); updateStatus(response.message); await fetchAndRenderFiles(); } catch (error) { handleError(error); } }
+    function refreshFromInput() { currentPath = pathDisplayEl.value; fetchAndRenderFiles(); }
+    function showLoader(show) { loader.style.display = show ? 'flex' : 'none'; }
+    async function apiRequest(endpoint, options = {}) { if (!['/read', '/write'].includes(endpoint)) showLoader(true); try { const headers = { ...options.headers }; if (currentPath !== null) headers['X-Current-Path'] = currentPath; if (options.method === 'POST' && options.body && options.body.constructor.name !== 'FormData') headers['Content-Type'] = 'application/json'; const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers }); const responseData = await response.json().catch(() => ({ message: response.statusText })); if (!response.ok) { const errorMessage = (typeof responseData === 'object' && responseData.message) ? responseData.message : responseData; throw new Error(errorMessage || `Server error: ${response.status}`); } return responseData; } finally { showLoader(false); } }
+    function navigateTo(folderName) { currentPath = (currentPath === '/') ? `/${folderName}` : `${currentPath}/${folderName}`; fetchAndRenderFiles(); }
+    function navigateUp() { if (currentPath === "/") return; currentPath = currentPath.substring(0, currentPath.lastIndexOf('/')) || '/'; fetchAndRenderFiles(); }
+    async function toggleExecutable(name, isCurrentlyExecutable) { const newExecutableState = !isCurrentlyExecutable; try { const response = await apiRequest('/chmod', { method: 'POST', body: JSON.stringify({ name, executable: newExecutableState }) }); updateStatus(response.message); await fetchAndRenderFiles(); } catch (error) { handleError(error); } }
+    function renameItem(old_name) { renameModal.style.display = 'block'; createModal.style.display = 'none'; confirmModal.style.display = 'none'; renameModalTitle.textContent = `Rename "${old_name}"`; renameInput.value = old_name; renameInput.dataset.oldName = old_name; modalOverlay.style.display = 'flex'; setTimeout(() => { renameInput.focus(); renameInput.select(); }, 50); }
+    async function handleRenameConfirm() { const old_name = renameInput.dataset.oldName, new_name = renameInput.value.trim(); if (!new_name || new_name === '' || new_name === old_name) { hideModal(); return; } hideModal(); try { const response = await apiRequest('/rename', { method: 'POST', body: JSON.stringify({ old_name, new_name }) }); updateStatus(response.message); await fetchAndRenderFiles(); } catch (error) { handleError(error); } }
+    function updateStatus(message) { statusBarEl.textContent = message; statusBarEl.style.color = 'var(--text-light)'; }
+    function handleError(error) { statusBarEl.textContent = `Error: ${error.message}`; statusBarEl.style.color = 'var(--danger-color)'; }
+
+    menuBtn.addEventListener('click', openSidebar);
+    sidebarOverlay.addEventListener('click', closeSidebar);
+    sidebarHomeBtn.addEventListener('click', (e) => { e.preventDefault(); closeSidebar(); document.getElementById('pathDisplay').value = TERMUX_HOME_PATH; refreshFromInput(); });
+    sidebarSdcardBtn.addEventListener('click', (e) => { e.preventDefault(); closeSidebar(); document.getElementById('pathDisplay').value = SDCARD_PATH; refreshFromInput(); });
+    modalCreateBtn.addEventListener('click', createItem);
+    modalCancelBtn.addEventListener('click', hideModal);
+    modalOverlay.addEventListener('click', (event) => { if (event.target === modalOverlay) hideModal(); });
+    modalNewNameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') createItem(); });
+    renameCancelBtn.addEventListener('click', hideModal);
+    renameConfirmBtn.addEventListener('click', handleRenameConfirm);
+    renameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleRenameConfirm(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (editorView.classList.contains('open')) { closeEditMode(); } else { closeSidebar(); hideModal(); clearSelection(); clearClipboard(); } } });
+    pathDisplayEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { refreshFromInput(); e.target.blur(); } });
+    document.addEventListener('DOMContentLoaded', fetchAndRenderFiles);
+
+    closeEditorBtn..addEventListener('click', closeEditMode);
+    saveFileBtn.addEventListener('click', saveFile);
+</script>
+</body>
+</html>
